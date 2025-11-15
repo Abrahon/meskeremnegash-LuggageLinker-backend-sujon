@@ -48,7 +48,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'cloudinary',
     'cloudinary_storage',
-    # 'django.contrib.sites',   
+    'channels', 
 
     # third-party apps
     'allauth',
@@ -56,17 +56,16 @@ INSTALLED_APPS = [
     'allauth.socialaccount',
     'accounts',
     'common',
-    'carrier.profile',
-    'carrier.dashboard',
-    'carrier.trip',
-    'carrier.pending_request',
-    'carrier.completed_trips',
-    'carrier.deliveries',
-    # 'carrier.messages',
-    'carrier.messages.apps.MessagesConfig',
-    'carrier.verifications',
-
-
+    'dashboard.profile',
+    'dashboard.dashboards',
+    'dashboard.trip',
+    'dashboard.pending_request',
+    'dashboard.completed_trips',
+    'dashboard.deliveries',
+    # 'dashboard.chat',
+    "dashboard.chat.apps.ChatConfig",  
+    
+    'dashboard.verification',
 
 ]
 
@@ -101,6 +100,20 @@ TEMPLATES = [
     },
 ]
 
+
+# settings.py (essential)
+
+ASGI_APPLICATION = "project.asgi.application"  # adjust to your project path
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [("127.0.0.1", 6379)],
+            # optionally: {"hosts": [("redis://127.0.0.1:6379/0")] }
+        },
+    },
+}
 
 WSGI_APPLICATION = 'core.wsgi.application'
 
