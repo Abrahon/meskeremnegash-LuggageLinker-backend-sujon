@@ -11,7 +11,7 @@ from .serializers import NationalIDSerializer, PassportSerializer, DriversLicens
 from .serializers import SelfieSerializer
 from .models import Address
 from .serializers import AddressSerializer
-
+from .utils import detect_document_type
 from rest_framework import status, generics, permissions
 from rest_framework.response import Response
 
@@ -83,16 +83,10 @@ class VerificationRetrieveCreateView(generics.RetrieveUpdateAPIView):
 
 
 # id verifications 
-# class DocumentUploadView(generics.GenericAPIView):
-#     """
-#     Handle uploading verification documents dynamically:
-#     - document_type = 'national_id'
-#     - document_type = 'passport'
-#     - document_type = 'drivers_license'
-#     """
 
+# class DocumentUploadView(generics.GenericAPIView):
 #     permission_classes = [permissions.IsAuthenticated]
-#     parser_classes = [MultiPartParser, FormParser, JSONParser]
+#     parser_classes = [MultiPartParser, FormParser, JSONParser] 
 
 #     serializer_classes = {
 #         "national_id": NationalIDSerializer,
@@ -101,47 +95,104 @@ class VerificationRetrieveCreateView(generics.RetrieveUpdateAPIView):
 #     }
 
 #     def get_serializer_class(self):
-#         document_type = self.request.data.get("document_type")
-#         if not document_type:
-#             return None
-#         return self.serializer_classes.get(document_type.lower())
+#         doc_type = self.request.data.get("document_type")
+#         return self.serializer_classes.get(doc_type)
 
 #     def post(self, request, *args, **kwargs):
 #         document_type = request.data.get("document_type")
 #         if not document_type:
-#             return Response(
-#                 {"error": "document_type is required. Options: national_id, passport, drivers_license."},
-#                 status=status.HTTP_400_BAD_REQUEST,
-#             )
+#             return Response({"error": "document_type is required"}, status=400)
 
 #         serializer_class = self.get_serializer_class()
 #         if not serializer_class:
-#             return Response(
-#                 {"error": f"Invalid document_type '{document_type}'. Must be one of: national_id, passport, drivers_license."},
-#                 status=status.HTTP_400_BAD_REQUEST,
-#             )
+#             return Response({"error": "invalid document_type"}, status=400)
 
-#         # Attach the user to the serializer data
-#         data = request.data.copy()
-#         data["user"] = request.user.id
+#         serializer = serializer_class(data=request.data, context={"request": request})
 
-#         serializer = serializer_class(data=data, context={"request": request})
 #         if serializer.is_valid():
-#             instance = serializer.save()
+#             # 👉 FIX: Attach user here
+#             serializer.save(user=request.user)
+
 #             return Response(
 #                 {
-#                     "message": f"{document_type.replace('_', ' ').title()} uploaded successfully.",
+#                     "message": f"{document_type} uploaded successfully",
 #                     "data": serializer.data,
 #                 },
-#                 status=status.HTTP_201_CREATED,
+#                 status=201
 #             )
 
-#         return Response(
-#             {"errors": serializer.errors},
-#             status=status.HTTP_400_BAD_REQUEST,
-#         )
+#         return Response(serializer.errors, status=400)
+
+
+# from rest_framework import generics, permissions, status
+# from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+# from rest_framework.response import Response
+# from .serializers import NationalIDSerializer, PassportSerializer, DriversLicenseSerializer
+# from .utils import detect_document_type
+
+# class DocumentUploadView(generics.GenericAPIView):
+#     """
+#     Upload documents dynamically and detect type automatically.
+#     document_type: national_id | passport | drivers_license
+#     """
+#     permission_classes = [permissions.IsAuthenticated]
+#     parser_classes = [MultiPartParser, FormParser, JSONParser] 
+
+#     serializer_classes = {
+#         "national_id": NationalIDSerializer,
+#         "passport": PassportSerializer,
+#         "drivers_license": DriversLicenseSerializer,
+#     }
+
+#     def get_serializer_class(self):
+#         doc_type = self.request.data.get("document_type")
+#         return self.serializer_classes.get(doc_type)
+
+#     def post(self, request, *args, **kwargs):
+#         document_type = request.data.get("document_type")
+#         if not document_type:
+#             return Response({"error": "document_type is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+#         serializer_class = self.get_serializer_class()
+#         if not serializer_class:
+#             return Response({"error": f"invalid document_type '{document_type}'"}, status=status.HTTP_400_BAD_REQUEST)
+
+#         data = request.data.copy()
+#         serializer = serializer_class(data=data, context={"request": request})
+
+#         if serializer.is_valid():
+#             # Attach user and save
+#             instance = serializer.save(user=request.user)
+
+#             # Detect document type from Cloudinary front_image
+#             if hasattr(instance, 'front_image') and instance.front_image:
+#                 detected_type = detect_document_type(instance.front_image.url)
+#                 instance.detected_type = detected_type
+#                 instance.save()
+#             else:
+#                 detected_type = "Unknown"
+
+#             return Response(
+#                 {
+#                     "message": f"{document_type.replace('_',' ').title()} uploaded successfully.",
+#                     "data": serializer.data,
+#                     "detected_type": detected_type
+#                 },
+#                 status=status.HTTP_201_CREATED
+#             )
+
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+from rest_framework import generics, permissions, status
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from rest_framework.response import Response
+from .serializers import NationalIDSerializer, PassportSerializer, DriversLicenseSerializer
+from .utils import detect_document_type
 
 class DocumentUploadView(generics.GenericAPIView):
+    """
+    Upload documents dynamically and detect type automatically.
+    Only allows: National ID, Passport, or Driving License.
+    """
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser] 
 
@@ -158,29 +209,54 @@ class DocumentUploadView(generics.GenericAPIView):
     def post(self, request, *args, **kwargs):
         document_type = request.data.get("document_type")
         if not document_type:
-            return Response({"error": "document_type is required"}, status=400)
+            return Response({"error": "document_type is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         serializer_class = self.get_serializer_class()
         if not serializer_class:
-            return Response({"error": "invalid document_type"}, status=400)
+            return Response({"error": f"invalid document_type '{document_type}'"}, status=status.HTTP_400_BAD_REQUEST)
 
-        serializer = serializer_class(data=request.data, context={"request": request})
+        data = request.data.copy()
+        serializer = serializer_class(data=data, context={"request": request})
 
         if serializer.is_valid():
-            # 👉 FIX: Attach user here
-            serializer.save(user=request.user)
+            # Save user
+            instance = serializer.save(user=request.user)
+
+            # Detect document type using Cloudinary URL
+            if hasattr(instance, 'front_image') and instance.front_image:
+                detected_type = detect_document_type(instance.front_image.url)
+
+                # Reject if detected type does not match user-selected type
+                expected_type_map = {
+                    "national_id": "National ID",
+                    "passport": "Passport",
+                    "drivers_license": "Driving License"
+                }
+
+                if detected_type != expected_type_map.get(document_type):
+                    # Delete the invalid instance if you want to prevent saving random images
+                    instance.delete()
+                    return Response(
+                        {"error": f"Invalid document uploaded. Detected type: {detected_type}. Only {expected_type_map.get(document_type)} allowed."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # Save detected type
+                instance.detected_type = detected_type
+                instance.save()
+            else:
+                return Response({"error": "Front image is required"}, status=status.HTTP_400_BAD_REQUEST)
 
             return Response(
                 {
-                    "message": f"{document_type} uploaded successfully",
+                    "message": f"{document_type.replace('_',' ').title()} uploaded successfully.",
                     "data": serializer.data,
+                    "detected_type": detected_type
                 },
-                status=201
+                status=status.HTTP_201_CREATED
             )
 
-        return Response(serializer.errors, status=400)
-
-
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class SelfieUploadView(generics.ListCreateAPIView):

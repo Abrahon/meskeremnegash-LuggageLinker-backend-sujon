@@ -132,8 +132,8 @@ def validate_file(file):
 class NationalIDSerializer(serializers.ModelSerializer):
     class Meta:
         model = NationalID
-        fields = [ "user", "front_image", "back_image", "status"]
-        read_only_fields = ["id", "status", "user"]
+        fields = [ "user", "front_image", "back_image", "status","detected_type"]
+        read_only_fields = ["id", "status", "user","detected_type"]
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

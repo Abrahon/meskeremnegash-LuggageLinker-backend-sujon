@@ -1,3 +1,4 @@
+# verifications/utils.py
 import requests
 from PIL import Image
 import pytesseract
